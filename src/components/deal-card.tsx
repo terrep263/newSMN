@@ -50,9 +50,13 @@ export function DealPlate({
       className={`deal-plate ${tall ? "aspect-[16/9]" : "aspect-[16/10]"} ${className}`}
       style={{ backgroundImage: `linear-gradient(135deg, ${from} 0%, ${to} 100%)` }}
     >
-      <div className="absolute inset-0 grid place-items-center text-white/25">
-        <CategoryIcon slug={deal.category_slug} className="h-16 w-16" strokeWidth={1.2} />
-      </div>
+      {deal.photo_id ? (
+        <img src={`/api/photos/${deal.photo_id}`} alt={deal.title} loading="lazy" className="absolute inset-0 h-full w-full object-cover" />
+      ) : (
+        <div className="absolute inset-0 grid place-items-center text-white/25">
+          <CategoryIcon slug={deal.category_slug} className="h-16 w-16" strokeWidth={1.2} />
+        </div>
+      )}
       <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-2 p-3">
         <span className="rounded-full bg-white/90 px-2.5 py-1 text-[0.6rem] font-bold uppercase tracking-[0.12em] text-brand-dark backdrop-blur">
           {category?.short ?? categoryName(deal.category_slug)}

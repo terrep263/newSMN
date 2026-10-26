@@ -20,6 +20,8 @@ export type Deal = {
   voucher_limit: number;
   vouchers_sold: number;
   image_hint: string;
+  /** Vendor-uploaded photo (served from /api/photos/:id); NULL = gradient artwork. */
+  photo_id: number | null;
   is_sample: boolean;
   /** NULL for seeded sample deals; set for deals a real vendor created. */
   vendor_id: number | null;
@@ -98,6 +100,7 @@ function jsonArray(raw: string | null | undefined): string[] {
 export function hydrate(row: DealRow): Deal {
   return {
     ...row,
+    photo_id: row.photo_id ?? null,
     highlights: jsonArray(row.highlights),
     is_sample: Boolean(row.is_sample),
     status: row.status === "paused" ? "paused" : "published",
