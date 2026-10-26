@@ -17,6 +17,7 @@ export type ClaimSearchBusiness = {
 export type OwnedListing = {
   id: number; slug: string; name: string; city_name: string; city_slug: string;
   opening_hours: string | null; phone: string | null; website: string | null; description: string | null;
+  photo_id: number | null;
 };
 export type SubmitClaimResult = { ok: true; status: ClaimStatus; message: string } | { ok: false; message: string };
 export type OwnedListingUpdate = {
@@ -109,7 +110,7 @@ export async function submitListingClaimForVendor(
 export async function ownedListingForVendor(vendorId: number): Promise<OwnedListing | null> {
   const { getDb } = await import("./db");
   return getDb().query<OwnedListing, [number]>(
-    `SELECT b.id, b.slug, b.name, b.city_name, b.city_slug, b.opening_hours, b.phone, b.website, b.description
+    `SELECT b.id, b.slug, b.name, b.city_name, b.city_slug, b.opening_hours, b.phone, b.website, b.description, b.photo_id
        FROM businesses b JOIN listing_claims c ON c.business_id = b.id
       WHERE c.vendor_id = ? AND c.status = 'approved' AND b.is_claimed = 1 AND b.claimed_by_vendor_id = ?
       ORDER BY c.decided_at DESC LIMIT 1`,

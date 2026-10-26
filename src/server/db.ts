@@ -73,6 +73,7 @@ export function getDb(): Database {
   migrateVoucherFlow(db);
   migrateDirectory(db);
   migrateListingClaims(db);
+  migratePhotos(db);
 
   _db = db;
   seedIfEmpty(db);
@@ -343,3 +344,19 @@ function seedIfEmpty(db: Database) {
 }
 
 export const DB_FILE = DB_PATH;
+
+/** Vendor-uploaded photos, stored as downscaled image bytes. deals/businesses
+ * point at a photo with photo_id; NULL keeps the gradient artwork. */
+function migratePhotos(db: Database) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS photos (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      mime       TEXT NOT NULL,
+      bytes      BLOB NOT NULL,
+      vendor_id  INTEGER REFERENCES vendors(id),
+      created_at TEXT NOT NULL
+    );
+  `);
+  addColumn(db, "deals", "photo_id", "INTEGER REFERENCES photos(id)");
+  addColumn(db, "businesses", "photo_id", "INTEGER REFERENCES photos(id)");
+}
