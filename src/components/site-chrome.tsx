@@ -230,8 +230,10 @@ export function SiteFooter() {
       <div className="border-t border-black/5 px-4 py-5">
         <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-2 text-center text-[0.72rem] text-ink-soft sm:flex-row sm:text-left">
           <p>© {new Date().getFullYear()} Shop My Neighborhood · Lake County, Florida</p>
-          <p>
-            Preview build: sample deals only, no payments are taken.
+          <p className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 sm:justify-end">
+            <Link to="/terms" className="hover:text-brand">Terms</Link>
+            <Link to="/privacy" className="hover:text-brand">Privacy</Link>
+            <Link to="/refunds" className="hover:text-brand">Refunds</Link>
           </p>
         </div>
       </div>
