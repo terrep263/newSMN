@@ -1,0 +1,34 @@
+{
+  "name": "team-site-template",
+  "private": true,
+  "sideEffects": false,
+  "type": "module",
+  "scripts": {
+    "dev": "bun --bun vite dev",
+    "build": "vite build",
+    "start": "bun run serve.ts",
+    "publish": "bash ./publish.sh",
+    "go-live": "bash ./go-live.sh",
+    "format": "bun fmt .",
+    "verify:vouchers": "bun run scripts/verify-voucher-flow.ts",
+    "verify:claims": "bun run scripts/verify-claim-flow.ts",
+    "ingest:osm": "bun run scripts/ingest-osm.ts"
+  },
+  "dependencies": {
+    "@tanstack/react-router": "^1.158.1",
+    "@tanstack/react-start": "^1.158.3",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.18",
+    "@types/node": "^25.3.0",
+    "@types/react": "^19.2.13",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.1.3",
+    "tailwindcss": "^4.1.18",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.1",
+    "vite-tsconfig-paths": "^6.0.5"
+  }
+}

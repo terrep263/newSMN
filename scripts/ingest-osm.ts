@@ -1,0 +1,34 @@
+#!/usr/bin/env bun
+/** Import collected OpenStreetMap directory records into the local marketplace DB.
+ * Cities are assigned solely by the closest Lake County community centroid; records
+ * farther than 12 km from every centroid are rejected. Re-runs retain an existing
+ * OSM record's stable <name>-<city> slug while refreshing verified OSM fields.
+ * Usage: bun run ingest:osm [path-to-json] */
+import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { CITIES } from "../src/lib/taxonomy";
+import { getDb } from "../src/server/db";
+
+const CATEGORY_SLUGS = new Set(["restaurants-cafes", "bars-nightlife", "health-medical-services", "home-repair-handyman-services", "hair-nails-barber-shops", "local-retail-boutiques", "auto-repair-detailing", "professional-services", "spas-massage-wellness", "fitness-personal-training", "grocery-markets", "lodging-vacation-rentals"]);
+const CENTROIDS: Record<string, [number, number]> = {
+  astatula: [28.7097, -81.7329], clermont: [28.5494, -81.7729], eustis: [28.8528, -81.6854], "fruitland-park": [28.8583, -81.9070], groveland: [28.5581, -81.8512], "howey-in-the-hills": [28.7169, -81.7717], "lady-lake": [28.9172, -81.9229], leesburg: [28.8108, -81.8779], mascotte: [28.5786, -81.8867], minneola: [28.5742, -81.7462], montverde: [28.6, -81.6742], "mount-dora": [28.8025, -81.6445], paisley: [28.9836, -81.5387], sorrento: [28.8081, -81.5631], tavares: [28.8042, -81.7256], "the-villages": [28.9594, -81.9492], umatilla: [28.9294, -81.6656],
+};
+type RawBusiness = { osm?: unknown; osm_url?: unknown; name?: unknown; category_slug?: unknown; city?: unknown; street?: unknown; postcode?: unknown; lat?: unknown; lon?: unknown; phone?: unknown; email?: unknown; website?: unknown; opening_hours?: unknown; description?: unknown; };
+const text = (value: unknown): string | null => typeof value === "string" ? value.trim().replace(/\s+/g, " ") || null : null;
+const nullable = (value: unknown) => text(value);
+const cleanSlug = (value: string) => value.toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/&/g, " and ").replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "").slice(0, 110) || "business";
+function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number { const rad = Math.PI / 180; const dLat = (lat2 - lat1) * rad; const dLon = (lon2 - lon1) * rad; const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * rad) * Math.cos(lat2 * rad) * Math.sin(dLon / 2) ** 2; return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)); }
+function nearestCity(lat: number, lon: number) { let closest: { slug: string; name: string; distance: number } | null = null; for (const city of CITIES) { const point = CENTROIDS[city.slug]; const distance = haversineKm(lat, lon, point[0], point[1]); if (!closest || distance < closest.distance) closest = { slug: city.slug, name: city.name, distance }; } return closest; }
+
+const defaultSource = resolve(import.meta.dir, "../../osm/businesses-final.json");
+const source = process.argv[2] ? resolve(process.argv[2]) : defaultSource;
+if (!existsSync(source)) { console.error(`Could not find ${source}. Usage: bun run ingest:osm [path-to-json]`); process.exit(1); }
+let records: RawBusiness[];
+try { const parsed = JSON.parse(readFileSync(source, "utf8")); if (!Array.isArray(parsed)) throw new Error("top-level JSON value must be an array"); records = parsed; } catch (error) { console.error(`Could not read ${source}: ${(error as Error).message}`); process.exit(1); }
+
+const db = getDb(); let inserted = 0, updated = 0, skipped = 0; const skippedByReason: Record<string, number> = {}; const bump = (target: Record<string, number>, key: string) => { target[key] = (target[key] ?? 0) + 1; };
+const currentByOsm = db.query<{ slug: string }, [string]>("SELECT slug FROM businesses WHERE osm_id = ?"); const slugTaken = db.query<{ osm_id: string }, [string]>("SELECT osm_id FROM businesses WHERE slug = ?");
+const upsert = db.prepare(`INSERT INTO businesses (osm_id, slug, name, category_slug, city_slug, city_name, street, postcode, lat, lon, phone, email, website, opening_hours, description, osm_url, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(osm_id) DO UPDATE SET name=excluded.name, category_slug=excluded.category_slug, city_slug=excluded.city_slug, city_name=excluded.city_name, street=excluded.street, postcode=excluded.postcode, lat=excluded.lat, lon=excluded.lon, phone=excluded.phone, email=excluded.email, website=excluded.website, opening_hours=excluded.opening_hours, description=excluded.description, osm_url=excluded.osm_url, updated_at=excluded.updated_at`);
+const cityCounts: Record<string, number> = {}; const categoryCounts: Record<string, number> = {};
+db.transaction(() => { for (const row of records) { const osm = text(row.osm), name = text(row.name), category = text(row.category_slug); if (!osm) { skipped++; bump(skippedByReason, "missing osm id"); continue; } if (!name) { skipped++; bump(skippedByReason, "missing name"); continue; } if (!category || !CATEGORY_SLUGS.has(category)) { skipped++; bump(skippedByReason, "missing or unsupported category"); continue; } const lat = Number(row.lat), lon = Number(row.lon); if (!Number.isFinite(lat) || !Number.isFinite(lon)) { skipped++; bump(skippedByReason, "missing coordinates"); continue; } const nearest = nearestCity(lat, lon); if (!nearest || nearest.distance > 12) { skipped++; bump(skippedByReason, "more than 12 km from a Lake County community"); continue; } const existing = currentByOsm.get(osm); let slug = existing?.slug ?? `${cleanSlug(name)}-${nearest.slug}`; if (!existing) { const base = slug; let suffix = 2; while (slugTaken.get(slug)) slug = `${base}-${suffix++}`; } const now = new Date().toISOString(); upsert.run(osm, slug, name, category, nearest.slug, nearest.name, nullable(row.street), nullable(row.postcode), lat, lon, nullable(row.phone), nullable(row.email), nullable(row.website), nullable(row.opening_hours), nullable(row.description), text(row.osm_url) ?? `https://www.openstreetmap.org/${osm}`, now, now); if (existing) updated++; else inserted++; bump(cityCounts, nearest.name); bump(categoryCounts, category); } })();
+console.log(`Ingested ${source}`); console.log(`Inserted: ${inserted}`); console.log(`Updated: ${updated}`); console.log(`Skipped: ${skipped}`); console.log("Skipped by reason:"); for (const [reason, count] of Object.entries(skippedByReason).sort()) console.log(`  ${reason}: ${count}`); console.log("Imported records by city:"); for (const city of CITIES) console.log(`  ${city.name}: ${cityCounts[city.name] ?? 0}`); console.log("Imported records by category:"); for (const category of [...CATEGORY_SLUGS]) console.log(`  ${category}: ${categoryCounts[category] ?? 0}`);
