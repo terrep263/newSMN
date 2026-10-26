@@ -602,7 +602,17 @@ export function VendorDealForm({
             onChange={(e) => setAcceptTerms(e.target.checked)}
             className="mt-0.5 h-4 w-4 rounded border-black/30 text-brand focus:ring-brand/40"
           />
-          <span>I accept these voucher terms and will honour them.</span>
+          <span>
+            I accept these voucher terms and will honour them. See the full{" "}
+            <a href="/terms" target="_blank" rel="noreferrer" className="text-brand underline">
+              Terms
+            </a>{" "}
+            and{" "}
+            <a href="/refunds" target="_blank" rel="noreferrer" className="text-brand underline">
+              Refund Policy
+            </a>
+            .
+          </span>
         </label>
         {fields.terms && <p className={errorClass}>{fields.terms}</p>}
         {!acceptTerms && (
