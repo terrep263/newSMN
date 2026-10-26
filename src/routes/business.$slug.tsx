@@ -3,12 +3,26 @@ import type { ReactNode } from "react";
 import { OSMAttribution } from "~/components/directory";
 import { Icon } from "~/components/icons";
 import { MarketplaceShell } from "~/components/site-chrome";
+import { businessJsonLd, canonicalUrl, jsonLdText } from "~/lib/seo";
 import { directoryCategoryFromSlug } from "~/lib/taxonomy";
 import { fetchDirectoryBusiness } from "~/server/directory-functions";
+import { fetchSiteOrigin } from "~/server/seo-functions";
 
 export const Route = createFileRoute("/business/$slug")({
-  loader: async ({ params }) => { const business = await fetchDirectoryBusiness({ data: { slug: params.slug } }); if (!business) throw notFound(); return { business, category: directoryCategoryFromSlug(business.category_slug) }; },
-  head: ({ loaderData }) => ({ meta: [{ title: loaderData ? `${loaderData.business.name} | ${loaderData.business.city_name}, FL` : "Business not found" }, { name: "description", content: loaderData ? `${loaderData.business.name}, a local ${loaderData.category?.name ?? "business"} listing in ${loaderData.business.city_name}, Florida.` : "" }] }),
+  loader: async ({ params }) => { const [business, origin] = await Promise.all([fetchDirectoryBusiness({ data: { slug: params.slug } }), fetchSiteOrigin()]); if (!business) throw notFound(); return { business, origin, category: directoryCategoryFromSlug(business.category_slug) }; },
+  head: ({ loaderData }) => {
+    const origin = loaderData?.origin;
+    const business = loaderData?.business;
+    return {
+      meta: [
+        { title: loaderData ? `${loaderData.business.name} | ${loaderData.business.city_name}, FL` : "Business not found" },
+        { name: "description", content: loaderData ? `${loaderData.business.name}, a local ${loaderData.category?.name ?? "business"} listing in ${loaderData.business.city_name}, Florida.` : "" },
+      ],
+      scripts: business && origin
+        ? [{ type: "application/ld+json", children: jsonLdText(businessJsonLd(business, canonicalUrl(origin, `/business/${business.slug}`), loaderData?.category?.name)) }]
+        : [],
+    };
+  },
   component: BusinessPage,
 });
 function readableHours(hours: string) { const simple = hours.match(/^((?:Mo|Tu|We|Th|Fr|Sa|Su)(?:-(?:Mo|Tu|We|Th|Fr|Sa|Su))?)\s+(\d{1,2}:\d{2})-(\d{1,2}:\d{2})$/); if (!simple) return hours; const days: Record<string, string> = { Mo: "Monday", Tu: "Tuesday", We: "Wednesday", Th: "Thursday", Fr: "Friday", Sa: "Saturday", Su: "Sunday" }; const [start, end] = simple[1].split("-"); return `${days[start]}${end ? `–${days[end]}` : ""}: ${simple[2]}–${simple[3]}`; }
