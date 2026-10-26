@@ -32,7 +32,7 @@ const DAY = "(?:Mo|Tu|We|Th|Fr|Sa|Su)";
 const SIMPLE_HOURS = new RegExp(`^${DAY}(?:-${DAY})?\\s+\\d{1,2}:\\d{2}-\\d{1,2}:\\d{2}$`);
 
 /** schema.org LocalBusiness for a directory listing. Only fields we actually have. */
-export function businessJsonLd(business: Business, pageUrl: string, categoryName?: string) {
+export function businessJsonLd(business: Business, pageUrl: string, categoryName?: string, origin?: string) {
   const data: Record<string, unknown> = {
     "@context": "https://schema.org",
     "@type": "LocalBusiness",
@@ -43,6 +43,7 @@ export function businessJsonLd(business: Business, pageUrl: string, categoryName
   if (business.description) data.description = business.description;
   else if (categoryName) data.description = `${business.name}, a local ${categoryName} listing in ${business.city_name}, Florida.`;
   if (business.phone) data.telephone = business.phone;
+  if (business.photo_id && origin) data.image = `${origin.replace(/\/+$/, "")}/api/photos/${business.photo_id}`;
 
   const address: Record<string, string> = {
     "@type": "PostalAddress",

@@ -1,5 +1,8 @@
-import { Link, createFileRoute, notFound, redirect } from "@tanstack/react-router";
+import { Link, createFileRoute, notFound, redirect, useRouter } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
 
+import { PhotoUploader } from "~/components/photo-uploader";
+import { fetchDealPhotoId, setDealPhotoFn } from "~/server/photo-functions";
 import { VendorDealForm } from "~/components/vendor-deal-form";
 import { VendorShell } from "~/components/vendor-chrome";
 import { fetchDealForm } from "~/server/vendor-functions";
@@ -13,13 +16,16 @@ export const Route = createFileRoute("/vendor/deals/$id/edit")({
     const data = await fetchDealForm({ data: { id } });
     if (!data) throw redirect({ to: "/vendor/login" });
     if (!data.deal) throw notFound();
-    return data;
+    const photoId = await fetchDealPhotoId({ data: { dealId: id } });
+    return { ...data, photoId };
   },
   component: EditDealPage,
 });
 
 function EditDealPage() {
-  const { me, deal, voucherSold, tierName, voucherLimitCeiling } = Route.useLoaderData();
+  const { me, deal, voucherSold, tierName, voucherLimitCeiling, photoId } = Route.useLoaderData();
+  const router = useRouter();
+  const savePhoto = useServerFn(setDealPhotoFn);
   if (!deal) return null;
 
   return (
@@ -43,6 +49,15 @@ function EditDealPage() {
           Changes appear on the public deal page immediately. Vouchers already sold keep their
           original price and terms.
         </p>
+
+        <div className="mt-5">
+          <PhotoUploader
+            label="Deal photo"
+            photoId={photoId}
+            onSave={(dataUrl) => savePhoto({ data: { dealId: deal.id, dataUrl } })}
+            onDone={() => router.invalidate()}
+          />
+        </div>
 
         <div className="mt-5 rounded-3xl border border-black/5 bg-white p-5 shadow-sm sm:p-6">
           <VendorDealForm

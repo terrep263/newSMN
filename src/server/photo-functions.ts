@@ -14,6 +14,19 @@ function toResult(r: { ok: boolean; photoId?: number | null; message?: string },
   return r.ok ? { ok: true, message: done, photoId: r.photoId ?? null } : { ok: false, message: r.message ?? "Could not save the photo.", photoId: null };
 }
 
+export const fetchDealPhotoId = createServerFn({ method: "GET" })
+  .validator((input: { dealId: number }) => input)
+  .handler(async ({ data }): Promise<number | null> => {
+    const vendor = await vendorOrNull();
+    if (!vendor) return null;
+    const { getDb } = await import("./db");
+    return (
+      getDb()
+        .query<{ photo_id: number | null }, [number, number]>("SELECT photo_id FROM deals WHERE id = ? AND vendor_id = ?")
+        .get(Number(data.dealId), vendor.id)?.photo_id ?? null
+    );
+  });
+
 export const setDealPhotoFn = createServerFn({ method: "POST" })
   .validator((input: { dealId: number; dataUrl: string | null }) => input)
   .handler(async ({ data }): Promise<PhotoActionResult> => {

@@ -6,7 +6,7 @@ export type Business = {
   city_slug: string; city_name: string; street: string | null; postcode: string | null;
   lat: number | null; lon: number | null; phone: string | null; email: string | null;
   website: string | null; opening_hours: string | null; description: string | null; osm_url: string;
-  is_claimed: number; claimed_by_vendor_id: number | null;
+  is_claimed: number; claimed_by_vendor_id: number | null; photo_id: number | null;
 };
 export type CountRow = { slug: string; count: number };
 

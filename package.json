@@ -12,6 +12,7 @@
     "format": "bun fmt .",
     "verify:vouchers": "bun run scripts/verify-voucher-flow.ts",
     "verify:claims": "bun run scripts/verify-claim-flow.ts",
+    "verify:photos": "bun run scripts/verify-photos.ts",
     "ingest:osm": "bun run scripts/ingest-osm.ts"
   },
   "dependencies": {
