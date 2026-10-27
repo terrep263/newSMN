@@ -3,14 +3,14 @@ import type { ReactNode } from "react";
 import type { Business } from "~/server/directory-functions";
 
 export function OSMAttribution() {
-  return <p className="mt-8 text-center text-xs text-ink-soft">Data © <a className="underline hover:text-brand" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap contributors, ODbL</a></p>;
+  return <p className="mt-8 text-center text-xs text-ink-soft">Data © <a className="underline hover:text-brand" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap contributors, ODbL</a> · Business details and ratings from <a className="underline hover:text-brand" href="https://www.google.com/maps" target="_blank" rel="noreferrer">Google Maps</a></p>;
 }
 
 export function BusinessCard({ business }: { business: Business }) {
   return <article className="overflow-hidden rounded-2xl border border-black/5 bg-white shadow-sm">
     {business.photo_id && <img src={`/api/photos/${business.photo_id}`} alt={business.name} loading="lazy" className="aspect-[16/9] w-full object-cover" />}
     <div className="p-5">
-    <p className="text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-brand-green-dark">{business.city_name}</p>
+    <p className="text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-brand-green-dark">{business.city_name}</p>{business.rating != null && <p className="mt-1 text-xs font-semibold text-ink-soft">★ {business.rating.toFixed(1)}{business.rating_count ? ` (${business.rating_count.toLocaleString("en-US")})` : ""}</p>}
     <h2 className="mt-1 font-display text-xl font-semibold text-brand-dark"><Link to="/business/$slug" params={{ slug: business.slug }} className="hover:underline">{business.name}</Link></h2>
     {(business.street || business.postcode) && <p className="mt-2 text-sm text-ink-soft">{[business.street, business.postcode].filter(Boolean).join(", ")}</p>}
     <div className="mt-4 flex flex-wrap gap-2">

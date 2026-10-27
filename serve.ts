@@ -77,4 +77,9 @@ const bindRetryingRace = async (): Promise<void> => {
 
 await bindRetryingRace();
 
+// Background Google Places import + refresh (idle unless GOOGLE_PLACES_API_KEY is set).
+import("./src/server/places-import")
+  .then((m) => m.startPlacesScheduler())
+  .catch((error) => console.error("[places] scheduler not started:", (error as Error).message));
+
 console.log(`team-site serving on http://${HOST}:${String(PORT)}`);

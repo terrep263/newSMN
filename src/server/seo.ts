@@ -71,7 +71,7 @@ export function sitemapXml(origin: string): string {
   }
 
   const businesses = getDb()
-    .query<{ slug: string; updated_at: string | null }, []>("SELECT slug, updated_at FROM businesses ORDER BY id")
+    .query<{ slug: string; updated_at: string | null }, []>("SELECT slug, updated_at FROM businesses WHERE is_active = 1 ORDER BY id")
     .all();
   for (const b of businesses) {
     entries.push({ path: `/business/${b.slug}`, lastmod: lastmod(b.updated_at) });
