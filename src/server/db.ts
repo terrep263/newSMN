@@ -78,7 +78,21 @@ export function getDb(): Database {
 
   _db = db;
   seedIfEmpty(db);
+  migrateCategorySlugs(db); // after seeding, so seeded sample deals move to the merged slugs too
   return db;
+}
+
+/** Deals and vendors used a second category list; move them to the directory slugs
+ *  (idempotent: once moved, nothing matches). */
+function migrateCategorySlugs(db: Database) {
+  const legacy: [string, string][] = [
+    ["health-medical", "health-medical-services"],
+    ["home-repair-handyman", "home-repair-handyman-services"],
+    ["hair-nails-barbers", "hair-nails-barber-shops"],
+  ];
+  for (const table of ["deals", "vendors", "businesses"]) {
+    for (const [from, to] of legacy) db.query(`UPDATE ${table} SET category_slug = ? WHERE category_slug = ?`).run(to, from);
+  }
 }
 
 /** Adds a column only when it is missing, so this file is safe to run against a
