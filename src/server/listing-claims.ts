@@ -161,7 +161,7 @@ export async function searchClaimBusinessesImpl(data: { q?: string; city?: strin
   const q = shortText(data.q, 120) ?? "";
   const city = shortText(data.city, 80) ?? "";
   if (!q && !city) return [];
-  const where: string[] = ["is_claimed = 0"];
+  const where: string[] = ["is_claimed = 0", "is_active = 1"];
   const values: string[] = [];
   if (q) { where.push("name LIKE ? COLLATE NOCASE"); values.push(`%${q}%`); }
   if (city) { where.push("city_slug = ?"); values.push(city); }

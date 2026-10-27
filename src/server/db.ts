@@ -27,6 +27,7 @@ export function getDb(): Database {
   const db = new Database(DB_PATH, { create: true });
   db.exec("PRAGMA journal_mode = WAL;");
   db.exec("PRAGMA foreign_keys = ON;");
+  db.exec("PRAGMA busy_timeout = 5000;");
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS deals (
@@ -275,6 +276,43 @@ function migrateDirectory(db: Database) {
     CREATE INDEX IF NOT EXISTS businesses_category_idx ON businesses(category_slug);
     CREATE INDEX IF NOT EXISTS businesses_city_idx ON businesses(city_slug);
     CREATE INDEX IF NOT EXISTS businesses_name_idx ON businesses(name);
+
+    -- Which (search term, city) pairs the Google Places importer has completed,
+    -- so a restart resumes instead of paying for the same searches again.
+    CREATE TABLE IF NOT EXISTS places_query_log (
+      term         TEXT NOT NULL,
+      city_slug    TEXT NOT NULL,
+      completed_at TEXT NOT NULL,
+      results      INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (term, city_slug)
+    );
+    CREATE TABLE IF NOT EXISTS import_runs (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      kind        TEXT NOT NULL,
+      started_at  TEXT NOT NULL,
+      finished_at TEXT,
+      requests    INTEGER NOT NULL DEFAULT 0,
+      inserted    INTEGER NOT NULL DEFAULT 0,
+      linked      INTEGER NOT NULL DEFAULT 0,
+      updated     INTEGER NOT NULL DEFAULT 0,
+      rejected    INTEGER NOT NULL DEFAULT 0,
+      note        TEXT
+    );
+  `);
+  // Google Places columns. Rows from Google keep osm_id = 'google:<place_id>' and
+  // osm_url = the Google Maps link so the original NOT NULL columns stay valid.
+  addColumn(db, "businesses", "source", "TEXT NOT NULL DEFAULT 'osm'");
+  addColumn(db, "businesses", "google_place_id", "TEXT");
+  addColumn(db, "businesses", "google_fetched_at", "TEXT");
+  addColumn(db, "businesses", "google_maps_url", "TEXT");
+  addColumn(db, "businesses", "google_fields", "TEXT");
+  addColumn(db, "businesses", "rating", "REAL");
+  addColumn(db, "businesses", "rating_count", "INTEGER");
+  addColumn(db, "businesses", "is_active", "INTEGER NOT NULL DEFAULT 1");
+  db.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS businesses_google_place_idx
+      ON businesses(google_place_id) WHERE google_place_id IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS businesses_active_idx ON businesses(is_active);
   `);
 }
 
