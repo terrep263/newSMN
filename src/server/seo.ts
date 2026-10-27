@@ -1,7 +1,7 @@
 // SERVER-ONLY. SEO plumbing: the public origin, robots.txt and sitemap.xml.
 // Import dynamically from route handlers and server functions only.
 
-import { CITIES, DIRECTORY_CATEGORIES } from "../lib/taxonomy";
+import { CITIES } from "../lib/taxonomy";
 import { DISALLOWED_PATHS } from "../lib/seo";
 import { getDb } from "./db";
 import { listDeals } from "./repository";
@@ -62,7 +62,6 @@ export function sitemapXml(origin: string): string {
     { path: "/terms" },
     { path: "/privacy" },
     { path: "/refunds" },
-    ...DIRECTORY_CATEGORIES.map((c) => ({ path: `/categories/${c.slug}` })),
     ...CITIES.map((c) => ({ path: `/city/${c.slug}` })),
   ];
 

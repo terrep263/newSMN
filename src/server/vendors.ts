@@ -410,9 +410,9 @@ export function countActiveDeals(vendorId: number): number {
 const IMAGE_HINT_BY_CATEGORY: Record<string, string> = {
   "restaurants-cafes": "coffee",
   "bars-nightlife": "taproom",
-  "health-medical": "dental",
-  "home-repair-handyman": "handyman",
-  "hair-nails-barbers": "barber",
+  "health-medical-services": "dental",
+  "home-repair-handyman-services": "handyman",
+  "hair-nails-barber-shops": "barber",
   "local-retail-boutiques": "boutique",
   "auto-repair-detailing": "detailing",
   "professional-services": "office",
