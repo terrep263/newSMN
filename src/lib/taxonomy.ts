@@ -17,26 +17,8 @@ export type Category = {
   icon: string; // key into <CategoryIcon>
 };
 
-// The 10 categories from the live directory, in the same order, plus
-// Grocery & Markets and Lodging & Vacation Rentals (owner's additions, pending
-// confirmation of the 11th/12th).
-export const CATEGORIES: Category[] = [
-  { slug: "restaurants-cafes", name: "Restaurants & Cafés", short: "Restaurants", icon: "utensils" },
-  { slug: "bars-nightlife", name: "Bars & Nightlife", short: "Bars & Nightlife", icon: "glass" },
-  { slug: "health-medical", name: "Health & Medical", short: "Health", icon: "pulse" },
-  { slug: "home-repair-handyman", name: "Home Repair & Handyman", short: "Home Repair", icon: "home" },
-  { slug: "hair-nails-barbers", name: "Hair Nails & Barbers", short: "Hair & Nails", icon: "scissors" },
-  { slug: "local-retail-boutiques", name: "Local Retail & Boutiques", short: "Local Retail", icon: "bag" },
-  { slug: "auto-repair-detailing", name: "Auto Repair & Detailing", short: "Auto Repair", icon: "car" },
-  { slug: "professional-services", name: "Professional Services", short: "Pro Services", icon: "briefcase" },
-  { slug: "spas-massage-wellness", name: "Spas & Massage & Wellness", short: "Spas & Wellness", icon: "leaf" },
-  { slug: "fitness-personal-training", name: "Fitness & Personal Training", short: "Fitness", icon: "dumbbell" },
-  { slug: "grocery-markets", name: "Grocery & Markets", short: "Grocery & Markets", icon: "basket" },
-  { slug: "lodging-vacation-rentals", name: "Lodging & Vacation Rentals", short: "Lodging", icon: "bed" },
-];
-
-/** Directory categories mirror the OpenStreetMap collector's stable public slugs.
- * The older CATEGORIES set above remains for the sample-deal marketplace. */
+/** The one category list for the whole site: directory listings, deals and vendors
+ *  all use these slugs. */
 export const DIRECTORY_CATEGORIES: Category[] = [
   { slug: "restaurants-cafes", name: "Restaurants & Cafés", short: "Restaurants", icon: "utensils" },
   { slug: "bars-nightlife", name: "Bars & Nightlife", short: "Bars & Nightlife", icon: "glass" },
@@ -52,8 +34,21 @@ export const DIRECTORY_CATEGORIES: Category[] = [
   { slug: "lodging-vacation-rentals", name: "Lodging & Vacation Rentals", short: "Lodging", icon: "bed" },
 ];
 
+export const CATEGORIES: Category[] = DIRECTORY_CATEGORIES;
+
+/** Slugs used by deals and vendors before the two lists were merged. */
+export const LEGACY_CATEGORY_SLUGS: Record<string, string> = {
+  "health-medical": "health-medical-services",
+  "home-repair-handyman": "home-repair-handyman-services",
+  "hair-nails-barbers": "hair-nails-barber-shops",
+};
+
+export function canonicalCategorySlug(slug: string): string {
+  return LEGACY_CATEGORY_SLUGS[slug] ?? slug;
+}
+
 export function directoryCategoryFromSlug(slug: string | undefined): Category | undefined {
-  return DIRECTORY_CATEGORIES.find((category) => category.slug === slug);
+  return DIRECTORY_CATEGORIES.find((category) => category.slug === (slug ? canonicalCategorySlug(slug) : slug));
 }
 
 export const CITY_NAMES = [
@@ -93,7 +88,7 @@ export function cityNameFromSlug(slug: string | undefined): string | undefined {
 
 export function categoryFromSlug(slug: string | undefined): Category | undefined {
   if (!slug) return undefined;
-  return CATEGORIES.find((c) => c.slug === slug);
+  return CATEGORIES.find((c) => c.slug === canonicalCategorySlug(slug));
 }
 
 export function categoryName(slug: string): string {

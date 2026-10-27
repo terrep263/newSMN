@@ -10,14 +10,18 @@ export type Business = {
   source: string; google_place_id: string | null; google_maps_url: string | null; rating: number | null; rating_count: number | null; is_active: number;
 };
 export type CountRow = { slug: string; count: number };
+export type DirectoryPage = {
+  businesses: Business[]; total: number; page: number; pages: number; pageSize: number;
+  categoryFacets: CountRow[]; cityFacets: CountRow[];
+};
 
 export const fetchDirectoryCategoryCounts = createServerFn({ method: "GET" }).handler(async () => {
   return (await import("./directory")).categoryCounts();
 });
 
 export const fetchDirectoryBusinesses = createServerFn({ method: "GET" })
-  .validator((input: { category?: string; city?: string; q?: string; limit?: number }) => input)
-  .handler(async ({ data }): Promise<{ businesses: Business[]; total: number }> => {
+  .validator((input: { category?: string; city?: string; q?: string; sort?: string; page?: number }) => input)
+  .handler(async ({ data }): Promise<DirectoryPage> => {
     return (await import("./directory")).listBusinesses(data);
   });
 
@@ -29,6 +33,6 @@ export const fetchDirectoryBusiness = createServerFn({ method: "GET" })
 
 export const fetchDirectoryCity = createServerFn({ method: "GET" })
   .validator((input: { city: string }) => input)
-  .handler(async ({ data }): Promise<{ businesses: Business[]; counts: CountRow[]; total: number }> => {
+  .handler(async ({ data }): Promise<{ counts: CountRow[]; total: number }> => {
     return (await import("./directory")).cityOverview(data.city);
   });
