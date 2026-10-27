@@ -11,6 +11,7 @@
 // the vendor is returning it through their own provider.
 
 import { getDb } from "./db";
+import { sendMailInBackground, voucherSoldEmail } from "./mail";
 import {
   getDealById,
   getVoucherRaw,
@@ -301,6 +302,21 @@ function sendWebhook(deal: Deal, voucher: Voucher, event: OutboundEvent): void {
   queueVoucherWebhook(target, event, payloadVoucher, payloadDeal);
 }
 
+/** Emails the vendor that a voucher was confirmed. Sample deals have no vendor and send nothing. */
+function notifyVendorOfConfirmedVoucher(deal: Deal, voucher: Voucher): void {
+  try {
+    if (deal.vendor_id == null) return;
+    const vendor = getDb().query<{ email: string }, [number]>("SELECT email FROM vendors WHERE id = ?").get(deal.vendor_id);
+    if (!vendor) return;
+    sendMailInBackground(voucherSoldEmail({
+      to: vendor.email, dealTitle: deal.title, code: voucher.code,
+      buyerName: voucher.buyer_name, quantity: voucher.quantity, amountCents: voucher.amount_cents,
+    }));
+  } catch (error) {
+    console.error("[mail] voucher notification skipped:", (error as Error).message);
+  }
+}
+
 /** Sends the "your voucher exists, here's what to confirm" event. */
 export function sendPendingWebhook(code: string): void {
   const voucher = getVoucherRaw(code);
@@ -398,6 +414,7 @@ export function confirmVoucherPayment(input: ConfirmInput): ConfirmResult {
 
   const after = getVoucherRaw(voucher.code)!;
   sendWebhook(deal, after, "voucher.payment_confirmed");
+  notifyVendorOfConfirmedVoucher(deal, after);
   return { ok: true, voucher: after, deal, via: input.via };
 }
 
