@@ -1,4 +1,4 @@
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 
 import { CATEGORIES, CITIES, SITE } from "~/lib/taxonomy";
@@ -65,6 +65,7 @@ export function Wordmark({ compact = false }: { compact?: boolean }) {
 
 export function CitySwitcher({ current }: { current?: string }) {
   const navigate = useNavigate();
+  const onDeals = useRouterState({ select: (state) => state.location.pathname.startsWith("/deals") });
   return (
     <label className="relative inline-flex items-center">
       <span className="sr-only">Choose your city</span>
@@ -73,7 +74,8 @@ export function CitySwitcher({ current }: { current?: string }) {
         value={current ?? ""}
         onChange={(e) => {
           const slug = e.target.value;
-          navigate({ to: "/deals", search: slug ? { city: slug } : {} });
+          if (onDeals) navigate({ to: "/deals", search: slug ? { city: slug } : {} });
+          else navigate({ to: "/businesses", search: slug ? { city: slug } : {} });
         }}
         className="appearance-none rounded-full border border-black/10 bg-white py-1.5 pr-7 pl-7 text-[0.78rem] font-medium text-ink shadow-sm hover:border-brand/40 focus:ring-2 focus:ring-brand/30 focus:outline-none"
       >
@@ -186,7 +188,7 @@ export function SiteFooter() {
             {CATEGORIES.slice(0, 6).map((c) => (
               <li key={c.slug}>
                 <Link
-                  to="/deals"
+                  to="/businesses"
                   search={{ category: c.slug }}
                   className="hover:text-brand"
                 >
@@ -204,7 +206,7 @@ export function SiteFooter() {
           <ul className="mt-3 grid gap-1.5 text-sm text-ink-soft">
             {CATEGORIES.slice(6).map((c) => (
               <li key={c.slug}>
-                <Link to="/deals" search={{ category: c.slug }} className="hover:text-brand">
+                <Link to="/businesses" search={{ category: c.slug }} className="hover:text-brand">
                   {c.name}
                 </Link>
               </li>
@@ -219,7 +221,7 @@ export function SiteFooter() {
           <ul className="mt-3 grid grid-cols-2 gap-1.5 text-sm text-ink-soft">
             {CITIES.map((city) => (
               <li key={city.slug}>
-                <Link to="/deals" search={{ city: city.slug }} className="hover:text-brand">
+                <Link to="/businesses" search={{ city: city.slug }} className="hover:text-brand">
                   {city.name}
                 </Link>
               </li>

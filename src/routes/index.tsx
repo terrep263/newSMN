@@ -54,7 +54,7 @@ function Home() {
               businesses in all 17 Lake County communities.
             </p>
 
-            <form action="/deals" method="get" className="mt-5 grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
+            <form action="/businesses" method="get" className="mt-5 grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
               <label className="relative block">
                 <span className="sr-only">City</span>
                 <Icon name="pin" className="pointer-events-none absolute top-3 left-3 h-4 w-4 text-brand" />
@@ -107,7 +107,7 @@ function Home() {
                   return (
                     <Link
                       key={slug}
-                      to="/deals"
+                      to="/businesses"
                       search={{ category: slug }}
                       className="rounded-full border border-black/10 bg-white px-3 py-1.5 text-[0.75rem] font-medium text-ink-soft hover:border-brand/40 hover:text-brand"
                     >
@@ -176,7 +176,7 @@ function Home() {
             </h2>
             <p className="mx-auto mt-3 max-w-2xl text-sm text-ink-soft">
               From family-owned restaurants to skilled home services — pick a category to see the
-              vouchers available right now.
+              businesses near you.
             </p>
           </div>
 
@@ -184,8 +184,8 @@ function Home() {
             {DIRECTORY_CATEGORIES.map((c) => (
               <Link
                 key={c.slug}
-                to="/categories/$slug"
-                params={{ slug: c.slug }}
+                to="/businesses"
+                search={{ category: c.slug }}
                 className="group rounded-2xl border border-black/5 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-brand/30 hover:shadow-md"
               >
                 <span className="grid h-10 w-10 place-items-center rounded-full bg-brand-green/12 text-brand-green-dark">
