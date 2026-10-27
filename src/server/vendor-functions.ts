@@ -173,6 +173,7 @@ export const vendorSignup = createServerFn({ method: "POST" })
     }
 
     auth.startSession(vendor);
+    try { const mail = await import("./mail"); mail.sendMailInBackground(mail.welcomeEmail(vendor)); } catch (err) { console.error("[signup] welcome email skipped:", (err as Error).message); }
 
     // Straight into Stripe Checkout for the chosen tier. If billing is not
     // connected in this runtime, the account still exists (status
