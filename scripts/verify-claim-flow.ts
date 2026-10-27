@@ -26,7 +26,7 @@ for (const file of [VERIFY_DB, `${VERIFY_DB}-wal`, `${VERIFY_DB}-shm`, FIXTURE_J
 // These imports deliberately happen after MARKETPLACE_DB_PATH is set.
 const dbModule = await import("../src/server/db");
 const vendors = await import("../src/server/vendors");
-const claims = await import("../src/server/listing-claim-functions");
+const claims = await import("../src/server/listing-claims");
 if (dbModule.DB_FILE !== VERIFY_DB) throw new Error(`wrong database: db.ts opened ${dbModule.DB_FILE}, expected ${VERIFY_DB}`);
 const db = dbModule.getDb();
 
@@ -183,8 +183,8 @@ await runCase(8, "admin claims are token-gated; wrong token fails and server rev
   const rejectSubmit = await claims.submitListingClaimForVendor(rejectVendor, { businessId: business("node/verify-admin-reject").id });
   expect(approveSubmit.ok && rejectSubmit.ok, `${approveSubmit.message} / ${rejectSubmit.message}`);
   process.env.ADMIN_CLAIM_TOKEN = "verify-admin-token";
-  const wrong = claims.adminClaimLoginForToken("wrong-token"); expect(!wrong.ok, "wrong admin token unexpectedly accepted");
-  const right = claims.adminClaimLoginForToken("verify-admin-token"); expect(right.ok, right.message);
+  const wrong = await claims.adminClaimLoginForToken("wrong-token"); expect(!wrong.ok, "wrong admin token unexpectedly accepted");
+  const right = await claims.adminClaimLoginForToken("verify-admin-token"); expect(right.ok, right.message);
   const unauthorized = await claims.decideListingClaimForAdmin(false, { claimId: claimFor(approveVendor.id, business("node/verify-admin-approve").id).id, decision: "approved" });
   expect(!unauthorized.ok && /Not authorized/.test(unauthorized.message), `unexpected unauthorized response: ${unauthorized.message}`);
   const approved = await claims.decideListingClaimForAdmin(true, { claimId: claimFor(approveVendor.id, business("node/verify-admin-approve").id).id, decision: "approved" });
