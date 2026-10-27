@@ -2,6 +2,7 @@
 // resolves its identity from the signed session cookie; a browser never supplies a vendor id.
 import { getCookie, setCookie } from "@tanstack/react-start/server";
 import type { Vendor } from "./vendors";
+import { claimDecisionEmail, sendMailInBackground } from "./mail";
 
 export type ClaimStatus = "pending" | "approved" | "rejected";
 export type ClaimSummary = {
@@ -96,7 +97,14 @@ export async function submitListingClaimForVendor(
       ? { ok: true as const, status, message: "Your account email domain matches this listing's website, so your claim has been approved." }
       : { ok: true as const, status, message: "Your claim is awaiting review. Shop My Neighborhood will review it and contact you at your account email." };
   });
-  try { return outcome(); } catch (error) {
+  try {
+    const result = outcome();
+    if (result.ok && result.status === "approved") {
+      const named = db.query<{ name: string }, [number]>("SELECT name FROM businesses WHERE id = ?").get(businessId);
+      sendMailInBackground(claimDecisionEmail({ to: vendor.email, businessName: named?.name ?? "your business", approved: true }));
+    }
+    return result;
+  } catch (error) {
     const message = error instanceof Error && error.message.includes("UNIQUE")
       ? "This business already has a claim in progress, or you already have a claim awaiting review."
       : error instanceof Error ? error.message : "We couldn't submit that claim.";
@@ -234,5 +242,12 @@ export async function decideListingClaimForAdmin(
     db.query("UPDATE listing_claims SET status = ?, decided_at = ?, decided_note = ? WHERE id = ? AND status = 'pending'").run(decision, now, note, claimId);
     return { ok: true, message: decision === "approved" ? "Claim approved and listing assigned." : "Claim rejected." };
   });
-  return action();
+  const result = action();
+  if (result.ok) {
+    const who = db.query<{ email: string; name: string }, [number]>(
+      "SELECT v.email AS email, b.name AS name FROM listing_claims c JOIN vendors v ON v.id = c.vendor_id JOIN businesses b ON b.id = c.business_id WHERE c.id = ?",
+    ).get(claimId);
+    if (who) sendMailInBackground(claimDecisionEmail({ to: who.email, businessName: who.name, approved: decision === "approved" }));
+  }
+  return result;
 }
