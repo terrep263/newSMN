@@ -17,7 +17,7 @@ for (const f of [VERIFY_DB, `${VERIFY_DB}-wal`, `${VERIFY_DB}-shm`, FIXTURE]) rm
 
 const dbModule = await import("../src/server/db");
 const vendors = await import("../src/server/vendors");
-const claims = await import("../src/server/listing-claim-functions");
+const claims = await import("../src/server/listing-claims");
 const photos = await import("../src/server/photos");
 const db = dbModule.getDb();
 
