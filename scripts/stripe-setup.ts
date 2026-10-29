@@ -10,11 +10,8 @@ import { dirname, join } from "node:path";
 const KEY = (process.env.STRIPE_SECRET_KEY ?? "").trim();
 const ORIGIN = (process.env.SITE_ORIGIN ?? "").trim().replace(/\/+$/, "");
 const DB = process.env.MARKETPLACE_DB_PATH ?? "";
-const PRICES = {
-  starter: "price_1UUZysRjf5f49qKtnn6PQzBP",
-  pro: "price_1UUZysRjf5f49qKtwjZnOEku",
-  enterprise: "price_1UUZysRjf5f49qKtWEBgJJKd",
-};
+import { TIERS } from "../src/lib/tiers";
+const PAID = TIERS.filter((t) => t.id !== "free");
 const EVENTS = ["checkout.session.completed", "customer.subscription.updated", "customer.subscription.deleted", "invoice.payment_failed"];
 
 if (!KEY) { console.log("FAIL STRIPE_SECRET_KEY is not set in this container"); process.exit(1); }
@@ -34,13 +31,24 @@ let failed = false;
 const mode = KEY.startsWith("sk_live_") || KEY.startsWith("rk_live_") ? "live" : KEY.startsWith("sk_test_") || KEY.startsWith("rk_test_") ? "test" : "unknown";
 console.log(`key mode: ${mode}`);
 
-for (const [name, id] of Object.entries(PRICES)) {
-  const r = await api("GET", `/prices/${id}`);
-  const ok = r.ok && r.json?.active === true && r.json?.recurring?.interval === "month";
-  console.log(`${ok ? "PASS" : "FAIL"} price ${name}${r.ok ? ` (${r.json?.unit_amount} ${r.json?.currency}/month, active=${r.json?.active})` : ` (${r.json?.error?.message ?? r.status})`}`);
-  if (!ok) failed = true;
+for (const t of PAID) {
+  const key = `smn_${t.id}_monthly`;
+  const found = await api("GET", `/prices?lookup_keys[]=${key}&active=true&limit=1`);
+  let price = found.ok ? found.json?.data?.[0] : null;
+  if (!price) {
+    const prod = await api("POST", "/products", { name: `Shop My Neighborhood ${t.name}`, "metadata[tier]": t.id });
+    if (!prod.ok) { console.log(`FAIL create product ${t.id} (${prod.json?.error?.message ?? prod.status})`); failed = true; continue; }
+    const created = await api("POST", "/prices", { product: prod.json.id, currency: "usd", unit_amount: String(t.priceCents), "recurring[interval]": "month", lookup_key: key });
+    if (!created.ok) { console.log(`FAIL create price ${t.id} (${created.json?.error?.message ?? created.status})`); failed = true; continue; }
+    price = created.json;
+    console.log(`created ${t.id} price`);
+  }
+  const ok = price.active === true && price.unit_amount === t.priceCents && price.recurring?.interval === "month";
+  const matches = price.id === t.stripePriceId;
+  console.log(`${ok && matches ? "PASS" : "FAIL"} price ${t.id} ${price.unit_amount} ${price.currency}/month id=${price.id}${matches ? "" : " (tiers.ts must be set to this id)"}`);
+  if (!ok || !matches) failed = true;
 }
-if (failed) { console.log("STOP: price check failed; webhook not created."); process.exit(1); }
+if (failed) { console.log("STOP: price check not clean; webhook not created."); process.exit(1); }
 
 const url = `${ORIGIN}/api/stripe/webhook`;
 const file = join(dirname(DB), "stripe-webhook-secret");
