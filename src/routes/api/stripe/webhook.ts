@@ -30,7 +30,7 @@ export const Route = createFileRoute("/api/stripe/webhook")({
     handlers: {
       POST: async ({ request }) => {
         const stripe = await import("../../../server/stripe");
-        const secret = (process.env.STRIPE_WEBHOOK_SECRET ?? "").trim();
+        const secret = stripe.webhookSecret();
 
         if (!secret) {
           console.error(

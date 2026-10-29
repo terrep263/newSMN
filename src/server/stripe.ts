@@ -15,6 +15,8 @@
 // (which redirect the customer to Stripe's own hosted page) and reads state
 // back. No key ever leaves the server; only IDs and URLs are returned.
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 
 const API_BASE = "https://api.stripe.com/v1";
 
@@ -23,6 +25,24 @@ export class BillingNotConfiguredError extends Error {
   constructor(public readonly missing: string[]) {
     super(`Stripe billing is not connected (missing: ${missing.join(", ")})`);
     this.name = "BillingNotConfiguredError";
+  }
+}
+
+/**
+ * The webhook signing secret: STRIPE_WEBHOOK_SECRET when set, otherwise the file
+ * scripts/stripe-setup.ts saved next to the database (so the secret never has to
+ * be pasted anywhere).
+ */
+export function webhookSecret(): string {
+  const fromEnv = (process.env.STRIPE_WEBHOOK_SECRET ?? "").trim();
+  if (fromEnv) return fromEnv;
+  const dbPath = process.env.MARKETPLACE_DB_PATH ?? "";
+  if (!dbPath) return "";
+  const file = join(dirname(dbPath), "stripe-webhook-secret");
+  try {
+    return existsSync(file) ? readFileSync(file, "utf8").trim() : "";
+  } catch {
+    return "";
   }
 }
 
@@ -45,7 +65,7 @@ export type StripeEnvStatus = {
  */
 export function stripeEnvStatus(): StripeEnvStatus {
   const key = (process.env.STRIPE_SECRET_KEY ?? "").trim();
-  const webhook = (process.env.STRIPE_WEBHOOK_SECRET ?? "").trim();
+  const webhook = webhookSecret();
   const known = ["sk_live_", "sk_test_", "rk_live_", "rk_test_"] as const;
   const found = key ? known.find((p) => key.startsWith(p)) : undefined;
   const missing: string[] = [];
