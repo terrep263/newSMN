@@ -64,8 +64,8 @@ export const TIERS: Tier[] = [
     poolLabel: "300 vouchers / month",
     blurb: "For one-location shops testing vouchers for the first time.",
     highlights: ["3 active deals", "300 vouchers a month", "Voucher redemption screen"],
-    // Starter $49/month recurring — product prod_VVbBU9QmP4Nm1R
-    stripePriceId: "price_1UUZysRjf5f49qKtnn6PQzBP",
+    // Starter $49/month recurring (lookup key smn_starter_monthly)
+    stripePriceId: "price_1UVyjURCIH2lnliAoQyB51HM",
   },
   {
     id: "pro",
@@ -80,8 +80,8 @@ export const TIERS: Tier[] = [
     blurb: "The usual fit for a busy restaurant, salon or service business.",
     highlights: ["10 active deals", "1,000 vouchers a month", "Sales dashboard per deal"],
     featured: true,
-    // Pro $99/month recurring — product prod_VVbBfbzvkK32gK
-    stripePriceId: "price_1UUZysRjf5f49qKtwjZnOEku",
+    // Pro $99/month recurring (lookup key smn_pro_monthly)
+    stripePriceId: "price_1UVyjVRCIH2lnliADuYf4nHH",
   },
   {
     id: "enterprise",
@@ -95,8 +95,8 @@ export const TIERS: Tier[] = [
     poolLabel: "Unlimited vouchers",
     blurb: "Multiple locations, seasonal promotions, unlimited campaigns.",
     highlights: ["Unlimited deals", "Unlimited vouchers", "Priority support"],
-    // Enterprise $199/month recurring — product prod_VVbBuljL08dBZK
-    stripePriceId: "price_1UUZysRjf5f49qKtWEBgJJKd",
+    // Enterprise $199/month recurring (lookup key smn_enterprise_monthly)
+    stripePriceId: "price_1UVyjVRCIH2lnliARHpgFCEU",
   },
 ];
 
