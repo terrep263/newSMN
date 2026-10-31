@@ -275,7 +275,7 @@ export function expireDueVouchers(now: number = Date.now()): number {
 // -------------------------------------------------------------- confirmation
 
 export type ConfirmResult =
-  | { ok: true; voucher: Voucher; deal: Deal; via: "webhook" | "manual" }
+  | { ok: true; voucher: Voucher; deal: Deal; via: "webhook" | "manual" | "stripe" }
   | { ok: false; error: "not_found" | "wrong_state" | "no_secret" | "bad_signature"; message: string };
 
 function sendWebhook(deal: Deal, voucher: Voucher, event: OutboundEvent): void {
@@ -328,7 +328,7 @@ export function sendPendingWebhook(code: string): void {
 
 export type ConfirmInput = {
   code: string;
-  via: "webhook" | "manual";
+  via: "webhook" | "manual" | "stripe";
   /** The vendor confirming by hand; null for the vendor's webhook. */
   vendorId?: number | null;
   note?: string;
@@ -403,12 +403,14 @@ export function confirmVoucherPayment(input: ConfirmInput): ConfirmResult {
   recordEvent(
     voucher.id,
     "payment_confirmed",
-    input.via === "webhook" ? "system" : "vendor",
+    input.via === "manual" ? "vendor" : "system",
     input.vendorId ?? null,
     input.note ??
       (input.via === "webhook"
         ? "Payment confirmed by the vendor's webhook."
-        : "Payment confirmed by the vendor in their dashboard."),
+        : input.via === "stripe"
+          ? "Payment verified by Stripe on the vendor's own account."
+          : "Payment confirmed by the vendor in their dashboard."),
     at,
   );
 
@@ -476,6 +478,16 @@ export function checkRedemption(
 
   const start = dayOf(deal.redemption_start);
   const end = dayOf(deal.redemption_end);
+
+  // An unpaid reservation that timed out (free-trial checkout) was never paid for,
+  // so there is no paid value to honour.
+  if (voucher.status === "expired" && !voucher.confirmed_at) {
+    return {
+      ok: false,
+      error: "not_confirmed",
+      message: "That checkout was never completed, so no payment was taken and the code isn't valid.",
+    };
+  }
 
   if (voucher.status === "expired" || (end && isoDay > end)) {
     // Paid value never expires — the vendor can still take it at face value.

@@ -24,6 +24,7 @@ import { CATEGORIES, CITIES, cityNameFromSlug } from "../lib/taxonomy";
 import { DEFAULT_MIN_DISCOUNT_PCT, validateDealRules } from "../lib/deal-rules";
 import { tierById } from "../lib/tiers";
 import { newWebhookSecret } from "./webhooks";
+import { endTrialsForUpgrade } from "./trials";
 import {
   checkRedemption,
   confirmVoucherPayment,
@@ -194,6 +195,8 @@ export function setSubscription(vendorId: number, patch: SubscriptionPatch): voi
   getDb()
     .query(`UPDATE vendors SET ${assignments} WHERE id = ?`)
     .run(...(Object.values(cols) as string[]), vendorId);
+  // A paid plan ends the free trial (sold vouchers stay redeemable).
+  if (patch.status === "active" || patch.status === "trialing") endTrialsForUpgrade(vendorId);
 }
 
 /** Webhook path: find the vendor by Stripe customer id when no vendor_id rides along. */
@@ -607,6 +610,12 @@ export function publishBlockedReason(deal: VendorDeal): string | null {
   return null;
 }
 
+function isTrialDeal(dealId: number): boolean {
+  return !!getDb()
+    .query<{ n: number }, [number]>("SELECT 1 AS n FROM deals WHERE id = ? AND trial_id IS NOT NULL")
+    .get(dealId);
+}
+
 export function createDealForVendor(vendor: Vendor, draft: DealDraft): SaveDealResult {
   const fields = validateDealDraft(vendor, draft);
   if (Object.keys(fields).length > 0) return { ok: false, error: "invalid", fields };
@@ -679,6 +688,9 @@ export function updateDealForVendor(
 ): SaveDealResult {
   const existing = getVendorDeal(vendor.id, dealId);
   if (!existing) return { ok: false, error: "not_found" };
+  if (isTrialDeal(dealId)) {
+    return { ok: false, error: "invalid", fields: { form: "Edit your free-trial deal from the Free trial page." } };
+  }
 
   const fields = validateDealDraft(vendor, draft, dealId);
   if (draft.voucherLimit < existing.vouchers_sold) {
@@ -742,6 +754,9 @@ export function setDealStatus(
 ): SetStatusResult {
   const deal = getVendorDeal(vendor.id, dealId);
   if (!deal) return { ok: false, error: "not_found" };
+  if (isTrialDeal(dealId)) {
+    return { ok: false, error: "Free-trial deals are paused and resumed from the Free trial page." };
+  }
 
   if (status === "published" && deal.status !== "published") {
     // Gating: without an active subscription a vendor may keep drafts, but
@@ -779,7 +794,7 @@ export type VoucherSale = {
   created_at: string;
   redeemed_at: string | null;
   confirmed_at: string | null;
-  confirmed_via: "webhook" | "manual" | "demo" | null;
+  confirmed_via: "webhook" | "manual" | "demo" | "stripe" | null;
   refunded_at: string | null;
   paid_value_only: number;
   deal_id: number;
@@ -787,7 +802,8 @@ export type VoucherSale = {
   deal_slug: string;
 };
 
-const SALE_COLUMNS = `v.id, v.code, v.order_ref, v.buyer_name, v.buyer_email, v.quantity,
+const SALE_COLUMNS = `v.id, v.code, v.order_ref, v.buyer_name,
+  CASE WHEN d.trial_id IS NOT NULL THEN '' ELSE v.buyer_email END AS buyer_email, v.quantity,
   v.amount_cents, v.status, v.created_at, v.redeemed_at, v.confirmed_at, v.confirmed_via,
   v.refunded_at, v.paid_value_only, v.deal_id, d.title AS deal_title, d.slug AS deal_slug`;
 
@@ -860,6 +876,15 @@ export function pendingVouchersForDeal(vendorId: number, dealId: number): Vouche
 
 // ------------------------------------------------- voucher state changes
 
+/** True when the voucher belongs to a free-trial deal (paid and refunded through Stripe Connect). */
+function isTrialVoucher(code: string): boolean {
+  return !!getDb()
+    .query<{ n: number }, [string]>(
+      "SELECT 1 AS n FROM vouchers v JOIN deals d ON d.id = v.deal_id WHERE v.code = ? AND d.trial_id IS NOT NULL",
+    )
+    .get(normalizeCode(code));
+}
+
 export type VoucherActionResult =
   | { ok: true; message: string; code: string; status: VoucherStatus }
   | { ok: false; error: string; message: string };
@@ -869,6 +894,13 @@ export type VoucherActionResult =
  * vendors who never wire one up. Writes the same payment_confirmed event.
  */
 export function confirmVoucherForVendor(vendorId: number, code: string): VoucherActionResult {
+  if (isTrialVoucher(code)) {
+    return {
+      ok: false,
+      error: "trial_voucher",
+      message: "Free-trial payments are verified by Stripe automatically — there is nothing to confirm by hand.",
+    };
+  }
   const result = confirmVoucherPayment({ code, via: "manual", vendorId });
   if (!result.ok) return { ok: false, error: result.error, message: result.message };
   return {
@@ -889,6 +921,13 @@ export function refundVoucherForVendor(
   code: string,
   now: number = Date.now(),
 ): VoucherActionResult {
+  if (isTrialVoucher(code)) {
+    return {
+      ok: false,
+      error: "trial_voucher",
+      message: "Refund this sale from your own Stripe dashboard. It updates here automatically once Stripe reports the refund.",
+    };
+  }
   const result = markVoucherRefunded(code, vendorId, now);
   if (!result.ok) return { ok: false, error: result.error, message: result.message };
   return {
@@ -955,7 +994,8 @@ function toRedeemable(voucher: Voucher, deal: Deal): RedeemableVoucher {
   return {
     code: voucher.code,
     buyer_name: voucher.buyer_name,
-    buyer_email: voucher.buyer_email,
+    // Free-trial buyers register with the platform; the vendor sees only name + code.
+    buyer_email: deal.trial_id != null ? "" : voucher.buyer_email,
     quantity: voucher.quantity,
     amount_cents: voucher.amount_cents,
     status: voucher.status,
