@@ -15,6 +15,7 @@
     "verify:photos": "bun run scripts/verify-photos.ts",
     "verify:mail": "bun run scripts/verify-mail.ts",
     "verify:places": "bun run scripts/verify-places.ts",
+    "verify:trials": "bun run scripts/verify-trials.ts",
     "ingest:osm": "bun run scripts/ingest-osm.ts"
   },
   "dependencies": {
