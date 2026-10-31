@@ -125,6 +125,8 @@ export type DealRulesDraft = {
   blackoutDates: string[];
   paymentLinkUrl: string;
   webhookUrl: string;
+  /** Free-trial deals are paid through Stripe Connect, so no payment link or webhook is checked. */
+  skipPayment?: boolean;
 };
 
 /** field -> message. Empty object means every rule passed. */
@@ -246,6 +248,7 @@ export function validateDealRules(draft: DealRulesDraft): DealRuleErrors {
   }
 
   // --- how the vendor gets paid
+  if (draft.skipPayment) return fields;
   const link = draft.paymentLinkUrl.trim();
   if (!link) {
     fields.paymentLinkUrl =

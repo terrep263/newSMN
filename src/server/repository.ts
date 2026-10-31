@@ -48,6 +48,11 @@ export type Deal = {
   blackout_dates: string[];
   terms_accepted_at: string | null;
   redemption_instructions: string | null;
+
+  // --- free-trial deals (NULL / 'none' for ordinary deals)
+  trial_id?: number | null;
+  review_state?: "none" | "pending" | "approved" | "rejected";
+  paused_reason?: string | null;
 };
 
 export type VoucherStatus = "pending_payment" | "issued" | "redeemed" | "refunded" | "expired";
@@ -69,12 +74,16 @@ export type Voucher = {
   /** When the vendor's webhook (or the vendor by hand) confirmed the payment. */
   confirmed_at: string | null;
   /** 'webhook' | 'manual' | 'demo' — how the confirmation arrived. */
-  confirmed_via: "webhook" | "manual" | "demo" | null;
+  confirmed_via: "webhook" | "manual" | "demo" | "stripe" | null;
   confirmed_by_vendor_id: number | null;
   refunded_at: string | null;
   refunded_by_vendor_id: number | null;
   /** 1 when the promotional value had lapsed and only the paid value was used. */
   paid_value_only: number;
+  /** Registered buyer (free-trial purchases only). */
+  buyer_id?: number | null;
+  /** Set only once Stripe has verified the payment. */
+  stripe_payment_intent?: string | null;
 };
 
 export type DealRow = Omit<
@@ -308,6 +317,10 @@ export function createVoucher(input: CreateVoucherInput): CreateVoucherResult {
     const deal = getDealBySlug(data.slug);
     if (!deal) return { ok: false, error: "not_found" };
     if (deal.status !== "published") return { ok: false, error: "unavailable" };
+    // Free-trial deals are sold only through Stripe Connect checkout (createTrialVoucher).
+    // Without this guard a trial deal (no payment link) would be treated as a demo
+    // and issue a free voucher.
+    if (deal.trial_id != null) return { ok: false, error: "unavailable" };
 
     const remaining = deal.voucher_limit - deal.vouchers_sold;
     if (remaining <= 0 || qty > remaining) {
