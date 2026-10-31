@@ -91,22 +91,30 @@ function secretKey(): string {
  * params use Stripe's bracket notation (`metadata[vendor_id]`, `line_items[0][price]`).
  * Throws an Error carrying Stripe's own message on a non-2xx response.
  */
+type StripeCallOptions = {
+  /** Acts on this connected account (direct charges): sent as the Stripe-Account header. */
+  account?: string;
+  /** Makes a retried POST safe: Stripe returns the first result instead of repeating it. */
+  idempotencyKey?: string;
+};
+
 async function stripeRequest<T>(
   method: "GET" | "POST",
   path: string,
   form?: Record<string, string | number | undefined | null>,
+  options: StripeCallOptions = {},
 ): Promise<T> {
   const key = secretKey();
   const url = new URL(API_BASE + path);
-  const init: RequestInit = {
-    method,
-    headers: {
-      Authorization: `Bearer ${key}`,
-      "Content-Type": "application/x-www-form-urlencoded",
-      // Pin the API version so a Stripe-side default change can't alter shapes.
-      "Stripe-Version": "2024-06-20",
-    },
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${key}`,
+    "Content-Type": "application/x-www-form-urlencoded",
+    // Pin the API version so a Stripe-side default change can't alter shapes.
+    "Stripe-Version": "2024-06-20",
   };
+  if (options.account) headers["Stripe-Account"] = options.account;
+  if (options.idempotencyKey) headers["Idempotency-Key"] = options.idempotencyKey;
+  const init: RequestInit = { method, headers };
   if (form && method === "GET") {
     for (const [k, v] of Object.entries(form)) {
       if (v !== undefined && v !== null) url.searchParams.set(k, String(v));
@@ -259,4 +267,132 @@ export function verifyWebhookSignature(
     }
   }
   return false;
+}
+
+
+// ------------------------------------------------- connected accounts (trial)
+//
+// Free-trial vendors take payment on their OWN Stripe account (Connect
+// "Standard"). Every charge is a direct charge on that account: no
+// application_fee_amount is ever set, the platform never holds the funds, and
+// the vendor alone handles refunds, disputes and payouts.
+
+/** Secret for the Connect webhook endpoint (/api/stripe/connect-webhook). */
+export function connectWebhookSecret(): string {
+  const fromEnv = (process.env.STRIPE_CONNECT_WEBHOOK_SECRET ?? "").trim();
+  if (fromEnv) return fromEnv;
+  const dbPath = process.env.MARKETPLACE_DB_PATH ?? "";
+  if (!dbPath) return "";
+  const file = join(dirname(dbPath), "stripe-connect-webhook-secret");
+  try {
+    return existsSync(file) ? readFileSync(file, "utf8").trim() : "";
+  } catch {
+    return "";
+  }
+}
+
+export type StripeConnectedAccount = {
+  id: string;
+  type?: string;
+  charges_enabled: boolean;
+  details_submitted: boolean;
+  payouts_enabled?: boolean;
+};
+
+export async function createConnectedAccount(input: {
+  vendorId: number;
+  email: string;
+  businessName: string;
+}): Promise<StripeConnectedAccount> {
+  return stripeRequest<StripeConnectedAccount>(
+    "POST",
+    "/accounts",
+    {
+      type: "standard",
+      country: "US",
+      email: input.email,
+      "business_profile[name]": input.businessName,
+      "metadata[vendor_id]": String(input.vendorId),
+    },
+    { idempotencyKey: `smn-connect-account-vendor-${input.vendorId}` },
+  );
+}
+
+export async function createAccountOnboardingLink(input: {
+  accountId: string;
+  returnUrl: string;
+  refreshUrl: string;
+}): Promise<{ url: string; expires_at: number }> {
+  return stripeRequest<{ url: string; expires_at: number }>("POST", "/account_links", {
+    account: input.accountId,
+    type: "account_onboarding",
+    return_url: input.returnUrl,
+    refresh_url: input.refreshUrl,
+  });
+}
+
+export async function retrieveConnectedAccount(accountId: string): Promise<StripeConnectedAccount> {
+  return stripeRequest<StripeConnectedAccount>("GET", `/accounts/${encodeURIComponent(accountId)}`);
+}
+
+export type StripeConnectSession = StripeCheckoutSession & {
+  payment_intent?: string | null;
+  expires_at?: number;
+};
+
+/**
+ * Direct-charge Checkout Session on the vendor's own account. Deliberately has
+ * no application_fee_amount: the platform takes nothing.
+ */
+export async function createVendorCheckoutSession(input: {
+  accountId: string;
+  voucherCode: string;
+  dealTitle: string;
+  vendorName: string;
+  unitAmountCents: number;
+  quantity: number;
+  customerEmail: string;
+  successUrl: string;
+  cancelUrl: string;
+  holdMinutes: number;
+}): Promise<StripeConnectSession> {
+  const expiresAt = Math.floor(Date.now() / 1000) + input.holdMinutes * 60;
+  return stripeRequest<StripeConnectSession>(
+    "POST",
+    "/checkout/sessions",
+    {
+      mode: "payment",
+      "payment_method_types[0]": "card",
+      "line_items[0][price_data][currency]": "usd",
+      "line_items[0][price_data][unit_amount]": input.unitAmountCents,
+      "line_items[0][price_data][product_data][name]": `${input.dealTitle} — ${input.vendorName}`.slice(0, 250),
+      "line_items[0][quantity]": input.quantity,
+      customer_email: input.customerEmail,
+      client_reference_id: input.voucherCode,
+      "metadata[voucher_code]": input.voucherCode,
+      "payment_intent_data[metadata][voucher_code]": input.voucherCode,
+      success_url: input.successUrl,
+      cancel_url: input.cancelUrl,
+      expires_at: expiresAt,
+    },
+    { account: input.accountId, idempotencyKey: `smn-voucher-checkout-${input.voucherCode}` },
+  );
+}
+
+export async function retrieveVendorCheckoutSession(
+  accountId: string,
+  sessionId: string,
+): Promise<StripeConnectSession> {
+  return stripeRequest<StripeConnectSession>(
+    "GET",
+    `/checkout/sessions/${encodeURIComponent(sessionId)}`,
+    undefined,
+    { account: accountId },
+  );
+}
+
+export async function expireVendorCheckoutSession(accountId: string, sessionId: string): Promise<void> {
+  await stripeRequest("POST", `/checkout/sessions/${encodeURIComponent(sessionId)}/expire`, undefined, {
+    account: accountId,
+  });
 }

@@ -141,9 +141,23 @@ export const fetchVoucher = createServerFn({ method: "GET" })
     } catch (err) {
       console.error("[voucher] expiry sweep failed:", (err as Error).message);
     }
-    const found = getVoucherByCode(data.code);
+    let found = getVoucherByCode(data.code);
     if (!found) return null;
-    const state = lifecycle.refundState(found.voucher);
+    // Free-trial vouchers become valid only when Stripe says so: settle a pending
+    // one by asking Stripe directly, never by trusting the browser's return.
+    if (found.deal.trial_id != null && found.voucher.status === "pending_payment") {
+      try {
+        const ts = await import("./trial-stripe");
+        await ts.reconcileTrialVoucher(data.code);
+        found = getVoucherByCode(data.code) ?? found;
+      } catch (err) {
+        console.error("[voucher] stripe reconcile failed:", (err as Error).message);
+      }
+    }
+    const state =
+      found.deal.trial_id != null
+        ? { allowed: false, reason: "Refunds for this deal are handled by the business through its own Stripe account — contact them directly.", deadline: "" }
+        : lifecycle.refundState(found.voucher);
     const end = found.deal.redemption_end;
     const today = lifecycle.localDay().isoDay;
     return {

@@ -97,6 +97,8 @@ function Headline({ status, deal }: { status: VoucherStatus; deal: PublicVoucher
 export function VoucherView({ data, returning = false }: { data: PublicVoucherData; returning?: boolean }) {
   const { voucher, deal, refund, promoExpired } = data;
   const status = voucher.status;
+  const isTrial = deal.trial_id != null;
+  const neverPaid = status === "expired" && !voucher.confirmed_at;
   const paidClaim =
     status === "pending_payment"
       ? "Not confirmed yet"
@@ -108,10 +110,36 @@ export function VoucherView({ data, returning = false }: { data: PublicVoucherDa
     <MarketplaceShell>
       <div className="mx-auto max-w-3xl px-4 py-10">
         <div className="no-print text-center">
-          <Headline status={status} deal={deal} />
+          {isTrial && status === "pending_payment" ? (
+            <>
+              <p className="kicker">Payment pending</p>
+              <h1 className="mt-2 font-display text-3xl font-semibold text-brand-dark sm:text-4xl">
+                Waiting for Stripe to confirm your payment
+              </h1>
+            </>
+          ) : neverPaid ? (
+            <>
+              <p className="kicker">Checkout not completed</p>
+              <h1 className="mt-2 font-display text-3xl font-semibold text-brand-dark sm:text-4xl">
+                This voucher was never paid for
+              </h1>
+              <p className="mt-2 text-sm text-ink-soft">The checkout timed out and no payment was taken, so this code is not valid.</p>
+            </>
+          ) : (
+            <Headline status={status} deal={deal} />
+          )}
         </div>
 
-        {returning && status === "pending_payment" && (
+        {isTrial && status === "pending_payment" && (
+          <div className="no-print mt-6 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-[0.82rem] leading-snug text-amber-900">
+            <p className="font-bold">Your code becomes valid the moment Stripe confirms the payment.</p>
+            <p className="mt-1">
+              This page checks with Stripe each time you open it. Finished paying? Reload in a few seconds. If you didn&apos;t finish, the reservation is released automatically after 30 minutes and you aren&apos;t charged.
+            </p>
+          </div>
+        )}
+
+        {!isTrial && returning && status === "pending_payment" && (
           <div className="no-print mt-6 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-[0.82rem] leading-snug text-amber-900">
             <p className="font-bold">Thanks — you&apos;re back from the payment page.</p>
             <p className="mt-1">
@@ -122,7 +150,7 @@ export function VoucherView({ data, returning = false }: { data: PublicVoucherDa
           </div>
         )}
 
-        {status === "pending_payment" && !returning && (
+        {!isTrial && status === "pending_payment" && !returning && (
           <div className="no-print mt-6 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-[0.82rem] leading-snug text-amber-900">
             <p className="font-bold">Waiting for the business to confirm your payment.</p>
             <p className="mt-1">
@@ -291,9 +319,9 @@ export function VoucherView({ data, returning = false }: { data: PublicVoucherDa
                 {refund.reason}
               </p>
               <p className="mt-1 text-[0.72rem] leading-relaxed text-ink-soft">
-                Refunds are handled by {deal.vendor_name} through their own payment provider — Shop
-                My Neighborhood never takes, holds or refunds voucher money. The 24-hour window is
-                counted from when the voucher code was created.
+                {isTrial
+                  ? `Refunds are handled by ${deal.vendor_name} through their own Stripe account — Shop My Neighborhood never takes, holds or refunds voucher money.`
+                  : `Refunds are handled by ${deal.vendor_name} through their own payment provider — Shop My Neighborhood never takes, holds or refunds voucher money. The 24-hour window is counted from when the voucher code was created.`}
               </p>
             </div>
           </div>
