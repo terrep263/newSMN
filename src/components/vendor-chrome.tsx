@@ -6,12 +6,13 @@ import { Icon } from "~/components/icons";
 import { MarketplaceShell } from "~/components/site-chrome";
 import { vendorLogout } from "~/server/vendor-functions";
 
-export type VendorTab = "dashboard" | "deals" | "redeem";
+export type VendorTab = "dashboard" | "deals" | "redeem" | "trial";
 
 const TABS: { id: VendorTab; to: string; label: string }[] = [
   { id: "dashboard", to: "/vendor/dashboard", label: "Dashboard" },
   { id: "deals", to: "/vendor/deals", label: "My deals" },
   { id: "redeem", to: "/vendor/redeem", label: "Redeem a voucher" },
+  { id: "trial", to: "/vendor/trial", label: "Free trial" },
 ];
 
 export function LogoutButton({ className = "" }: { className?: string }) {
