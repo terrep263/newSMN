@@ -1,6 +1,7 @@
 import { Link, createFileRoute, notFound } from "@tanstack/react-router";
 
 import { BuyForm } from "~/components/buy-form";
+import { TrialBuyPanel } from "~/components/trial-buy-panel";
 import { DealCard, DealPlate, SampleBadge, VouchersLeft } from "~/components/deal-card";
 import { Icon } from "~/components/icons";
 import { MarketplaceShell } from "~/components/site-chrome";
@@ -315,6 +316,13 @@ function DealPage() {
                   <div className="rounded-2xl bg-ink/5 px-4 py-3 text-center text-sm font-semibold text-ink-soft">
                     Sold out — all {deal.voucher_limit} vouchers have been claimed.
                   </div>
+                ) : deal.trial_id != null ? (
+                  <TrialBuyPanel
+                    slug={deal.slug}
+                    priceCents={deal.price_cents}
+                    maxQuantity={Math.min(5, left, deal.per_customer_limit)}
+                    vendorName={deal.vendor_name}
+                  />
                 ) : (
                   <BuyForm
                     slug={deal.slug}
@@ -330,8 +338,9 @@ function DealPage() {
               <div className="mt-5 space-y-2 border-t border-black/5 pt-4 text-[0.75rem] text-ink-soft">
                 <p className="flex items-start gap-2">
                   <Icon name="ticket" className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand-green-dark" />
-                  Voucher code issued the moment you start, and valid once the vendor confirms your
-                  payment.
+                  {deal.trial_id != null
+                    ? "Your voucher is valid the moment Stripe confirms your payment."
+                    : "Voucher code issued the moment you start, and valid once the vendor confirms your payment."}
                 </p>
                 <p className="flex items-start gap-2">
                   <Icon name="check" className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand-green-dark" />
@@ -351,9 +360,10 @@ function DealPage() {
               </div>
             ) : (
               <div className="mt-3 rounded-2xl border border-brand/25 bg-brand/5 px-4 py-3 text-center text-[0.72rem] leading-snug text-brand-dark">
-                <span className="font-bold">You pay {deal.vendor_name} directly.</span> Payment
-                happens on their own payment page. Shop My Neighborhood never takes, holds or refunds
-                voucher money.
+                <span className="font-bold">You pay {deal.vendor_name} directly.</span>{" "}
+                {deal.trial_id != null
+                  ? "Payment is taken by Stripe on the business's own account. Shop My Neighborhood never takes, holds or refunds voucher money; the business handles refunds."
+                  : "Payment happens on their own payment page. Shop My Neighborhood never takes, holds or refunds voucher money."}
               </div>
             )}
           </div>
