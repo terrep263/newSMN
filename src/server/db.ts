@@ -75,6 +75,7 @@ export function getDb(): Database {
   migrateDirectory(db);
   migrateListingClaims(db);
   migratePhotos(db);
+  migrateFreeTrials(db);
 
   _db = db;
   seedIfEmpty(db);
@@ -411,4 +412,128 @@ function migratePhotos(db: Database) {
   `);
   addColumn(db, "deals", "photo_id", "INTEGER REFERENCES photos(id)");
   addColumn(db, "businesses", "photo_id", "INTEGER REFERENCES photos(id)");
+}
+
+/**
+ * Free Trial Vendor system (idempotent).
+ *
+ * vendors.tier has a CHECK that cannot be altered without a table rebuild, so a
+ * trial vendor stays on tier 'free' and all trial state lives here:
+ *   free_trials      — one row per trial request; status drives eligibility
+ *   trial_city_caps  — per-city vendor cap (pilot starts Leesburg at 3)
+ *   trial_audit      — every trial action, who did it, and why
+ *   trial_alerts     — admin alerts (deduped by alert_key)
+ *   buyers/_sessions — registered buyers; the platform keeps their data
+ *   trial_complaints — one complaint per buyer per deal
+ * deals.review_state is separate from deals.status because hydrate() only
+ * understands 'published' | 'paused'.
+ */
+function migrateFreeTrials(db: Database) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS free_trials (
+      id                INTEGER PRIMARY KEY AUTOINCREMENT,
+      vendor_id         INTEGER NOT NULL REFERENCES vendors(id) ON DELETE CASCADE,
+      business_id       INTEGER NOT NULL REFERENCES businesses(id),
+      city_slug         TEXT NOT NULL,
+      category_slug     TEXT NOT NULL,
+      status            TEXT NOT NULL DEFAULT 'requested'
+                        CHECK (status IN ('requested','active','lapsed','ended','terminated','rejected')),
+      requested_at      TEXT NOT NULL,
+      approved_at       TEXT,
+      expires_at        TEXT,
+      live_deadline_at  TEXT,
+      first_live_at     TEXT,
+      ended_at          TEXT,
+      end_reason        TEXT,
+      decision_note     TEXT
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS free_trials_business_unique
+      ON free_trials(business_id) WHERE status IN ('requested','active','ended','terminated');
+    CREATE UNIQUE INDEX IF NOT EXISTS free_trials_vendor_unique
+      ON free_trials(vendor_id) WHERE status IN ('requested','active','ended','terminated');
+    CREATE UNIQUE INDEX IF NOT EXISTS free_trials_category_unique
+      ON free_trials(city_slug, category_slug) WHERE status IN ('active','ended','terminated');
+    CREATE INDEX IF NOT EXISTS free_trials_status_idx ON free_trials(status);
+
+    CREATE TABLE IF NOT EXISTS trial_city_caps (
+      city_slug  TEXT PRIMARY KEY,
+      vendor_cap INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS trial_audit (
+      id        INTEGER PRIMARY KEY AUTOINCREMENT,
+      trial_id  INTEGER REFERENCES free_trials(id) ON DELETE CASCADE,
+      deal_id   INTEGER,
+      actor     TEXT NOT NULL,
+      action    TEXT NOT NULL,
+      detail    TEXT NOT NULL DEFAULT '',
+      at        TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS trial_audit_trial_idx ON trial_audit(trial_id, id);
+
+    CREATE TABLE IF NOT EXISTS trial_alerts (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      trial_id    INTEGER REFERENCES free_trials(id) ON DELETE CASCADE,
+      kind        TEXT NOT NULL,
+      message     TEXT NOT NULL,
+      alert_key   TEXT NOT NULL UNIQUE,
+      created_at  TEXT NOT NULL,
+      resolved_at TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS buyers (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      name          TEXT NOT NULL,
+      email         TEXT NOT NULL UNIQUE,
+      password_hash TEXT NOT NULL,
+      created_at    TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS buyer_sessions (
+      token      TEXT PRIMARY KEY,
+      buyer_id   INTEGER NOT NULL REFERENCES buyers(id) ON DELETE CASCADE,
+      expires_at TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS buyer_login_attempts (
+      email        TEXT PRIMARY KEY,
+      fail_count   INTEGER NOT NULL DEFAULT 0,
+      window_start TEXT NOT NULL,
+      last_attempt TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS trial_complaints (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      deal_id    INTEGER NOT NULL REFERENCES deals(id) ON DELETE CASCADE,
+      buyer_id   INTEGER NOT NULL REFERENCES buyers(id) ON DELETE CASCADE,
+      voucher_id INTEGER REFERENCES vouchers(id),
+      reason     TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      UNIQUE (deal_id, buyer_id)
+    );
+  `);
+
+  addColumn(db, "vendors", "stripe_connect_account_id", "TEXT");
+  addColumn(db, "vendors", "stripe_connect_charges_enabled", "INTEGER NOT NULL DEFAULT 0");
+  addColumn(db, "vendors", "stripe_connect_details_submitted", "INTEGER NOT NULL DEFAULT 0");
+
+  addColumn(db, "deals", "trial_id", "INTEGER REFERENCES free_trials(id)");
+  addColumn(db, "deals", "review_state", "TEXT NOT NULL DEFAULT 'none'");
+  addColumn(db, "deals", "review_note", "TEXT");
+  addColumn(db, "deals", "reviewed_at", "TEXT");
+  addColumn(db, "deals", "paused_reason", "TEXT");
+
+  addColumn(db, "vouchers", "buyer_id", "INTEGER REFERENCES buyers(id)");
+  addColumn(db, "vouchers", "stripe_session_id", "TEXT");
+  addColumn(db, "vouchers", "stripe_payment_intent", "TEXT");
+  addColumn(db, "vouchers", "checkout_expires_at", "TEXT");
+
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS deals_trial_idx ON deals(trial_id);
+    CREATE INDEX IF NOT EXISTS vouchers_buyer_idx ON vouchers(buyer_id);
+    CREATE UNIQUE INDEX IF NOT EXISTS vouchers_stripe_session_key
+      ON vouchers(stripe_session_id) WHERE stripe_session_id IS NOT NULL;
+  `);
+
+  // Leesburg pilot starts with 3 vendors; other cities use the default cap.
+  db.query("INSERT OR IGNORE INTO trial_city_caps (city_slug, vendor_cap) VALUES ('leesburg', 3)").run();
 }
